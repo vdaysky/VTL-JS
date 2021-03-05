@@ -40,6 +40,7 @@ class Component
             }
             else
             {
+                console.log("add raw", char);
                 html += char;
                 prs.next();
             }
@@ -367,9 +368,15 @@ class Parser
 				return compound
 			}
 
-            console.log("add to compound content", char);
-			content += char;
-            this.next();
+            // make sure not to save first char of tag
+            // todo FIX THIS MESS
+            if (!this.tag_class)
+            {
+                console.log("add to compound content", char);
+                content += char;
+                this.next();
+            }
+
         }
         throw new Error("reached end while serching for closing tag\nyor template is bad")
     }
@@ -460,7 +467,29 @@ class ElseIfTag extends LogicalTag
     {
         return "ELIF";
     }
+}
 
+class ElseTag extends LogicalTag
+{
+    static related_tags = []
+    static modifier = "$";
+    static tag_name = "else";
+    static mainTagClass; // set later
+
+    static isCompoundStart()
+    {
+        return false;
+    }
+
+    static isCompoundEnd()
+    {
+        return false;
+    }
+
+    render(context)
+    {
+        return "else";
+    }
 }
 
 class EndIfTag extends Tag
@@ -496,12 +525,12 @@ class IfBlock extends Block
 
         for (let comp of this.compounds)
         {
-            console.log(comp);
-            let bool = comp.head.evaluate(context);
+
+            let bool = (comp.head instanceof ElseTag) || comp.head.evaluate(context);
 
             if (bool)
             {
-                html += comp.content + "\n";
+                html += comp.content;
                 break;
             }
         }
@@ -511,7 +540,7 @@ class IfBlock extends Block
 
 class IfTag extends LogicalTag
 {
-    static related_tags = [ElseIfTag]
+    static related_tags = [ElseIfTag, ElseTag]
     static modifier = "$";
     static tag_name = "if";
     static closeTagClass = EndIfTag;
@@ -538,6 +567,7 @@ class IfTag extends LogicalTag
 EndIfTag.mainTagClass = IfTag;
 ElseIfTag.mainTagClass = IfTag;
 IfBlock.mainTagClass = IfTag;
+ElseTag.mainTagClass = IfTag;
 
 
 class ExecuteTag extends Tag
@@ -559,14 +589,13 @@ class ExecuteTag extends Tag
     render(context)
     {
         let val = this.evaluate(context);
-        console.log("rendered", val);
         return val;
     }
 }
 
 class TagManager
 {
-    static registered_tags = [ExecuteTag, IfTag, EndIfTag, ElseIfTag];
+    static registered_tags = [ExecuteTag, IfTag, EndIfTag, ElseIfTag, ElseTag];
     static getTagClass(content, ptr)
     {
 
@@ -593,6 +622,6 @@ class BlockManager
 }
 
 
-let comp = new Component(`{$ if a == b $} a ({% a %}) equeals b ({% b %}) {$ elseif true $} a is not equal to b {$endif$}"`)
-let html = comp.render({a: 1, b: 1})
+let comp = new Component(`{$ if a == b $} a ({% a %}) equeals b ({% b %}) {$ elseif true $} a is not equal to b {$endif$}`)
+let html = comp.render({a: 1, b: 2})
 document.getElementById("container").innerHTML = html;
