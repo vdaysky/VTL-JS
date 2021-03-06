@@ -3,6 +3,17 @@ function print(msg, color)
     console.log(`%c${msg}`, `color:${color}`);
 }
 
+Array.prototype.remove = function() {
+    var what, a = arguments, L = a.length, ax;
+    while (L && this.length) {
+        what = a[--L];
+        while ((ax = this.indexOf(what)) !== -1) {
+            this.splice(ax, 1);
+        }
+    }
+    return this;
+};
+
 class Component
 {
 	constructor(template)
@@ -23,29 +34,53 @@ class Component
 			this.tag_class = TagManager.getTagClass(prs.content, prs.ptr)
 
             let char = prs.get();
-            console.log(`char [${prs.ptr}]`, char, "tag", this.tag_class);
-
+            if (this.tag_class){
+                print(this.tag_class.name, "orange");
+            }
 			if (this.tag_class && this.tag_class.isCompoundStart())
             {
-				let block = prs.readBlock(context)
-                console.log(block, context);
+				let block = prs.readBlock()
 				html += block.render(context)
-
+                console.log("block: ", block);
             }
 			else if (this.tag_class)
             {
                 let tag = prs.readTag()
+                console.log("standalone tag: ", tag);
 				html += tag.render(context);
-
             }
             else
             {
-                console.log("add raw", char);
                 html += char;
                 prs.next();
             }
         }
 		return html
+    }
+}
+
+// this class stores renderable wrappers for html, tags and blocks
+// used by blocks to store its content
+class RenderableContent
+{
+    constructor(renderables)
+    {
+        this.content = renderables || [];
+    }
+
+    add(renderable)
+    {
+        this.content.push(renderable);
+    }
+
+    render(context)
+    {
+        let html = "";
+        for (let renderable of this.content)
+        {
+            html += renderable.render(context);
+        }
+        return html;
     }
 }
 
@@ -323,14 +358,13 @@ class Parser
 
     // reads everything from tag to start of other tag
     // so next call to readCompound will start at tag for sure
-	readCompound(block, context)
+	readCompound(block)
     {
-		let content = ""
-        //let ptr = this.ptr;
-
         // we know there is tag at the start
         let headTag = this.readTag();
         let compound = headTag.createCompound();
+        let html = "";
+        let contentRenderable = new RenderableContent();
 
 
 		while(this.hasNext())
@@ -344,45 +378,47 @@ class Parser
                 // closing tag of inner compound closes outer compound
                 if (this.tag_class.isCompoundStart())
                 {
-                    content += this.readBlock().render();
+                    contentRenderable.add(new RenderableHtmlWrapper(html))
+                    contentRenderable.add(this.readBlock());
+                    html = "";
                 }
 
                 // parse tags that are not compounds
                 else if (!this.tag_class.isCompoundable())
                 {
-                    let tag = this.readTag()
-                    content += tag.render(context);
+                    contentRenderable.add(new RenderableHtmlWrapper(html));
+                    contentRenderable.add(this.readTag());
+                    html = "";
                 }
                 else
                 {
                     console.log("tag", this.tag_class.name, "belongs to compound");
                 }
             }
-            if (this.tag_class.name)
-            print(this.tag_class.name, "blue");
+
 			if (this.compoundHasRelatedTagNext(block))
-			{
-                console.log("content stopped: tag next(", this.ptr, ")");
+            {
+                contentRenderable.add(new RenderableHtmlWrapper(html));
+
 				compound.head = headTag
-				compound.content = content;
-				return compound
+				compound.content = contentRenderable;
+                //console.log("end of compound: ", compound);
+				return compound;
 			}
 
             // make sure not to save first char of tag
             // todo FIX THIS MESS
             if (!this.tag_class)
             {
-                console.log("add to compound content", char);
-                content += char;
+                html += char;
                 this.next();
             }
-
         }
         throw new Error("reached end while serching for closing tag\nyor template is bad")
     }
 
 
-	readBlock(context)
+	readBlock()
 	{
 		let opening_tag = this.peekReadTag();
         let blockClass = BlockManager.getBlockClass(opening_tag.constructor);
@@ -392,23 +428,35 @@ class Parser
 
 		while (!this.peekReadTag().constructor.isCompoundEnd())
 		{
-			let compound = this.readCompound(block, context)
+			let compound = this.readCompound(block)
 			block.add(compound)
 		}
         console.log("\n\n FOUND END TAG \n\n");
 		this.readTag() // move pointer from end tag
+        print("block:", "green");
+        console.log(block);
 		return block;
 	}
 }
 
 // this thing is used just to keep data together
-// shouldnt be renderable
+// shouldnt be renderable edit: why tho?
 class Compound
 {
     constructor(head, content)
     {
+        if (content && !(content instanceof RenderableContent) )
+        {
+            throw new Error("content of compound must be RenderableContent instance")
+        }
         this.head = head;
         this.content = content;
+    }
+
+    render(context)
+    {
+        console.log("\t\trender", this.head, this.content);
+        return this.head.render(context) + this.content.render(context);
     }
 }
 
@@ -434,6 +482,18 @@ class Block
     }
 }
 
+class RenderableHtmlWrapper
+{
+    constructor(html)
+    {
+        this.content = html;
+    }
+    render(context)
+    {
+        return this.content;
+    }
+}
+
 class LogicalTag extends Tag
 {
     evaluate(context)
@@ -446,6 +506,46 @@ class LogicalTag extends Tag
 }
 
 // implementations
+class ForTag extends Tag
+{
+    static related_tags = []
+    static modifier = "$";
+    static tag_name = "for";
+    static mainTagClass = ForTag;
+    static closeTagClass; // set later
+    static blockClass; // set later
+
+    static isCompoundStart()
+    {
+        return true;
+    }
+
+    static isCompoundEnd()
+    {
+        return false;
+    }
+}
+
+class EndForTag extends Tag
+{
+    static related_tags = []
+    static modifier = "$";
+    static tag_name = "for";
+    static mainTagClass = ForTag;
+
+    static isCompoundStart()
+    {
+        return false;
+    }
+
+    static isCompoundEnd()
+    {
+        return true;
+    }
+}
+
+
+
 class ElseIfTag extends LogicalTag
 {
     static related_tags = []
@@ -461,11 +561,6 @@ class ElseIfTag extends LogicalTag
     static isCompoundEnd()
     {
         return false;
-    }
-
-    render(context)
-    {
-        return "ELIF";
     }
 }
 
@@ -515,6 +610,37 @@ class EndIfTag extends Tag
     }
 }
 
+class ForBlock extends Block
+{
+    static mainTagClass = ForTag;
+
+    render(context)
+    {
+        let html = "";
+
+        for (let comp of this.compounds)
+        {
+            let expr = comp.head.clean().split(" ").remove("");
+            // {$ for x of y $}
+            if (expr.length == 3 && expr[1] == "of")
+            {
+                let y_var = expr[2];
+                let x_var = expr[0];
+                for (let x of context[y_var])
+                {
+                    context[x_var] = x;
+                    console.log("new context", context);
+                    html += comp.content.render(context);
+                }
+            }
+        }
+        return html;
+    }
+}
+
+ForTag.blockClass = ForBlock;
+ForTag.closeTagClass = EndForTag;
+
 class IfBlock extends Block
 {
     static mainTagClass;
@@ -530,7 +656,7 @@ class IfBlock extends Block
 
             if (bool)
             {
-                html += comp.content;
+                html += comp.content.render(context);
                 break;
             }
         }
@@ -561,6 +687,34 @@ class IfTag extends LogicalTag
     render(context)
     {
         return "if was here";
+    }
+}
+
+class IncludeTag extends Tag
+{
+    static related_tags = []
+    static modifier = "%";
+    static tag_name = "include";
+
+    static isCompoundStart()
+    {
+        return false;
+    }
+
+    static isCompoundEnd()
+    {
+        return false;
+    }
+
+    render(context)
+    {
+        let template_name = this.clean().replaceAll(" ", "");
+        let component = context[template_name];
+        if (!component)
+        {
+            return "invalid component";
+        }
+        return component.render(context);
     }
 }
 
@@ -595,7 +749,7 @@ class ExecuteTag extends Tag
 
 class TagManager
 {
-    static registered_tags = [ExecuteTag, IfTag, EndIfTag, ElseIfTag, ElseTag];
+    static registered_tags = [IncludeTag, ExecuteTag, IfTag, EndIfTag, ElseIfTag, ElseTag, ForTag, EndForTag];
     static getTagClass(content, ptr)
     {
 
@@ -605,7 +759,7 @@ class TagManager
 
             if (parser.hasTagNext(tagClass))
             {
-                console.log(content.substring(ptr), "is", tagClass.name);
+                console.log(content.substring(ptr, ptr+10) + "...", "is", tagClass.name);
                 return tagClass;
             }
         }
@@ -621,7 +775,18 @@ class BlockManager
     }
 }
 
+let test = new Component(`a == {% a %}`)
+let imageViewer = new Component(`
+    {$ for x of b $}
+        {$ if x != 3 $}
+            (x: {% x %})
+        {$ else $}
+            (x is three)
+        {$ endif $}
+    {$ endfor $}
+    {% include comp %}
+    `
+)
 
-let comp = new Component(`{$ if a == b $} a ({% a %}) equeals b ({% b %}) {$ elseif true $} a is not equal to b {$endif$}`)
-let html = comp.render({a: 1, b: 2})
+let html = imageViewer.render({a: "something", b: [1,2,3], comp: test})
 document.getElementById("container").innerHTML = html;
