@@ -159,10 +159,12 @@ class Tag
         return clean;
     }
 
+    // used to display html and to do additional processing
     render(context)
     {
         throw new Error("Not Implenemted")
     }
+
     generateContext(context)
     {
         let eval_var_ctx = "";
@@ -439,6 +441,47 @@ class Parser
 	}
 }
 
+
+// All tags that inherit from FilteredTag
+// will be preprocessed in constructor
+window.filters = {"enumerate": (a)=>a.entries(), "test": (a)=>"test:"+a };
+class FilteredTag extends Tag
+{
+    static filterOperator = ">>";
+
+    constructor(content)
+    {
+        super(content);
+        this.content = FilteredTag.apply(this.clean())
+    }
+
+    static apply(expression)
+    {
+        let parser = new Parser(expression);
+
+        let pre_filter = "";
+        if (!expression.includes(this.filterOperator))
+        {
+            return expression
+        }
+
+        let matches = expression.matchAll(`[^\\s]*\\s*${this.filterOperator}\\s*[^\\s]*`);
+        let processed_expr = "";
+        let expr_process_end_idx = 0;
+        for (let match of matches)
+        {
+            let match_segment = match[0];
+            let first_val = match_segment.match(`^[^\\s]*`)
+            let last_val = match_segment.match(`(?<=${this.filterOperator}\\s*)\\S.*`)
+
+            processed_expr += expression.substring(expr_process_end_idx, match.index);
+            processed_expr += `filters.${last_val}(${first_val})`
+            expr_process_end_idx = match.index + match_segment.length;
+        }
+        return processed_expr;
+    }
+}
+
 // this thing is used just to keep data together
 // shouldnt be renderable edit: why tho?
 class Compound
@@ -494,7 +537,7 @@ class RenderableHtmlWrapper
     }
 }
 
-class LogicalTag extends Tag
+class LogicalTag extends FilteredTag
 {
     evaluate(context)
     {
@@ -505,8 +548,57 @@ class LogicalTag extends Tag
     }
 }
 
+class LetTag extends FilteredTag
+{
+    static related_tags = []
+    static modifier = "$";
+    static tag_name = "let";
+
+    static isCompoundStart()
+    {
+        return false;
+    }
+
+    static isCompoundEnd()
+    {
+        return false;
+    }
+
+    evaluate(context)
+    {
+        let cont = this.clean();
+        let parts = cont.split(" ")
+        parts.remove("")
+        if (parts.length == 3)
+        {
+            let x_var = parts[0];
+            let mode = parts[1];
+            let expr = parts[2];
+
+            if (mode == "=")
+            {
+                let eval_ctx = this.generateContext(context);
+                let value;
+                try
+                {
+                    value = eval(eval_ctx + "\n" + expr);
+                } catch
+                {}
+                context[x_var] = value;
+            }
+        }
+    }
+
+    render(context)
+    {
+        this.evaluate(context);
+        console.log(context);
+        return "";
+    }
+}
+
 // implementations
-class ForTag extends Tag
+class ForTag extends FilteredTag
 {
     static related_tags = []
     static modifier = "$";
@@ -580,11 +672,6 @@ class ElseTag extends LogicalTag
     {
         return false;
     }
-
-    render(context)
-    {
-        return "else";
-    }
 }
 
 class EndIfTag extends Tag
@@ -602,11 +689,6 @@ class EndIfTag extends Tag
     static isCompoundEnd()
     {
         return true;
-    }
-
-    render(context)
-    {
-        return "endif was here";
     }
 }
 
@@ -683,14 +765,9 @@ class IfTag extends LogicalTag
     {
         return false;
     }
-
-    render(context)
-    {
-        return "if was here";
-    }
 }
 
-class IncludeTag extends Tag
+class IncludeTag extends FilteredTag
 {
     static related_tags = []
     static modifier = "%";
@@ -709,7 +786,7 @@ class IncludeTag extends Tag
     render(context)
     {
         let template_name = this.clean().replaceAll(" ", "");
-        let component = context[template_name];
+        let component = context[template_name] || window[template_name];
         if (!component)
         {
             return "invalid component";
@@ -724,7 +801,7 @@ IfBlock.mainTagClass = IfTag;
 ElseTag.mainTagClass = IfTag;
 
 
-class ExecuteTag extends Tag
+class ExecuteTag extends FilteredTag
 {
     static related_tags = []
     static modifier = "%";
@@ -749,7 +826,13 @@ class ExecuteTag extends Tag
 
 class TagManager
 {
-    static registered_tags = [IncludeTag, ExecuteTag, IfTag, EndIfTag, ElseIfTag, ElseTag, ForTag, EndForTag];
+    // execute tag should be last since it does not have prefix.
+    // that means execute tag will match anything
+    static registered_tags = [
+        LetTag, IncludeTag, ExecuteTag,
+        IfTag, EndIfTag, ElseIfTag, ElseTag,
+        ForTag, EndForTag
+    ];
     static getTagClass(content, ptr)
     {
 
@@ -775,7 +858,7 @@ class BlockManager
     }
 }
 
-let test = new Component(`a == {% a %}`)
+var test = new Component(`a == {% a %}`)
 let imageViewer = new Component(`
     {$ for x of b $}
         {$ if x != 3 $}
@@ -784,7 +867,10 @@ let imageViewer = new Component(`
             (x is three)
         {$ endif $}
     {$ endfor $}
-    {% include comp %}
+    {$ let variable = 42 $}
+    {% variable %}
+    {% include test %}
+    {% 1 >> test %}
     `
 )
 
