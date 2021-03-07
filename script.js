@@ -1,19 +1,110 @@
-const filter_scope = "filters";
+const filter_scope = "vtl.filters";
+const localvarstack_scope = "vtl.locals"
+
+
+function getScope(scope, init_with)
+{
+    let obj = window;
+    let parts = scope.split(".");
+    for (let [i, path] of parts.entries())
+    {
+        let child = obj[path];
+        if (!child)
+        {
+            if (init_with)
+            {
+                if (i == parts.length - 1) {
+                    obj[path] = init_with
+                }
+                else {
+                    obj[path] = {}
+                }
+                child = obj[path]
+            }
+            else
+            {
+                return;
+            }
+        }
+        obj = child;
+    }
+    return obj;
+}
+
+function findInStack(name)
+{
+    let stack = getScope(localvarstack_scope)
+    let value;
+    for (let scope of stack)
+    {
+        if (scope[name] != undefined)
+        {
+            value = scope[name]
+        }
+    }
+    return value;
+}
+
+function setInScope(scope, varname, value)
+{
+    getScope(scope)[varname] = value;
+}
+function setScope(scope, object)
+{
+    getScope(scope, object);
+}
 
 function registerCustomFilter(name, cb)
 {
-    window[filter_scope][name] = cb;
+    setInScope(filter_scope, name, cb);
+}
+
+// adds local variable to context on stack
+function addLocal(name, value)
+{
+    let stack = getScope(localvarstack_scope);
+    let context = stack[stack.length-1];
+    // TODO: remove this. stack cant be empty:
+    // its initialized before rendering with global context
+    if (!context)
+    {
+        context = stack[0] = {};
+    }
+    context[name] = value;
+    setScope(localvarstack_scope, stack);
+}
+
+// add context onto stack
+function addOnContextStack()
+{
+    let scope = getScope(localvarstack_scope, []);
+    scope.push({});
+}
+
+// remove context from stack
+function popContextStack()
+{
+    let stack = getScope(localvarstack_scope);
+    stack.pop();
+}
+
+function emptyStack()
+{
+    getScope(localvarstack_scope) = [];
 }
 
 function getValue(name, context)
 {
     // serch for var everywhere
-    if (context[name] || window[name])
+    let global_var = window[name];
+    let context_var = context[name];
+    let stack_var = findInStack(name);
+    if (context_var || stack_var || global_var)
     {
-        let val = context[name] || window[name];
-        context[name] = val;
-        return val;
+        // if global var was required, save it as local copy
+        return context[name] = context_var || stack_var || global_var;
     }
+
     if (name.includes("."))
     {
         let path = ""
@@ -85,19 +176,38 @@ class Component
         this.name = name || "UNKNOWN";
         this.cache = false;
     }
+
+    static getLocalContext(glob_context)
+    {
+        let flat = {};
+        for (let scope of getScope(localvarstack_scope))
+        {
+            for (let varname of Object.keys(scope))
+            {
+                if (scope[varname]){
+                    flat[varname] = scope[varname]
+                }
+            }
+        }
+        return {...glob_context, ...flat};
+    }
+
     static generateContext(context)
     {
         let eval_var_ctx = "";
-        for (let varname of Object.keys(context || {}))
+
+        for (let varname of Object.keys( context || {} ))
         {
             eval_var_ctx += `let ${varname} = context.${varname};\n`;
         }
+
         return eval_var_ctx;
     }
 
 	render(context)
     {
         let html = "";
+        addOnContextStack();
 
         if (this.cache)
         {
@@ -189,11 +299,18 @@ class RenderableContent
 
     render(context)
     {
+        console.log("add to stack");
+        addOnContextStack();
+
         let html = "";
         for (let renderable of this.content)
         {
+            console.log("render", renderable);
             html += renderable.render(context);
         }
+
+        popContextStack();
+        console.log("pop from stack");
         return html;
     }
 }
@@ -285,7 +402,16 @@ class Tag
     {
         //if (!context)
         //throw new Error("Stack trace");
-        return eval(Component.generateContext(context) + this.clean());
+        let ctx = Component.getLocalContext(context);
+        let strCtx = Component.generateContext(ctx);
+        let oldctx = context
+        // swap contexts so local variables will be defined in global context
+        context = ctx;
+        let res = eval(strCtx + this.clean());
+        // and then swap back
+        context = oldctx
+        return res;
+
     }
 }
 
@@ -553,10 +679,11 @@ class Parser
 	}
 }
 
-
 // All tags that inherit from FilteredTag
 // will be preprocessed in constructor
-window[filter_scope] = {"enumerate": (a)=>a.entries(), "test": (a)=>"test:"+a };
+let filters = {"enumerate": (a)=>a.entries()};
+setScope(filter_scope, filters)
+
 class FilteredTag extends Tag
 {
     static filterOperator = ">>";
@@ -595,7 +722,6 @@ class FilteredTag extends Tag
 }
 
 // this thing is used just to keep data together
-// shouldnt be renderable edit: why tho?
 class Compound
 {
     constructor(head, content)
@@ -696,7 +822,8 @@ class LetTag extends FilteredTag
                 let value;
 
                 let val = getValue(expr, context);
-                context[x_var] = val
+                addLocal(x_var, val);
+                //context[x_var] = val
                 //context[x_var] = value;
             }
         }
@@ -747,8 +874,6 @@ class EndForTag extends Tag
         return true;
     }
 }
-
-
 
 class ElseIfTag extends LogicalTag
 {
@@ -1001,3 +1126,18 @@ class BlockManager
         return tag.mainTagClass.blockClass;
     }
 }
+
+new Element("body").addComponent(
+    new Component(`
+        {$ if true $}
+            {$ let temp = 69 $}
+            {$ if true $}
+                {% a %}
+                {% temp %}
+            {$ endif $}
+            {% temp %}
+        {$ endif $}
+
+
+        `),
+    {a: 42})
