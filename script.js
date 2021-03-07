@@ -1,3 +1,65 @@
+const filter_scope = "filters";
+
+function registerCustomFilter(name, cb)
+{
+    window[filter_scope][name] = cb;
+}
+
+function getValue(name, context)
+{
+    // serch for var everywhere
+    if (context[name] || window[name])
+    {
+        let val = context[name] || window[name];
+        context[name] = val;
+        return val;
+    }
+    if (name.includes("."))
+    {
+        let path = ""
+        let parts = name.split(".")
+        let obj = window;
+        for (let child of parts)
+        {
+            obj = obj[child];
+            if (!obj)
+            {
+                break;
+            }
+        }
+        if (obj)
+        {
+            context[name] = obj;
+            return obj;
+        }
+    }
+
+    // evaluate expressions
+    // TODO: replace with filters
+    let context_text = Component.generateContext(context);
+    eval(`${context_text}\ncontext.temp_var = ${name}`)
+    return context.temp_var;
+}
+
+class Element
+{
+    constructor(jq_selector)
+    {
+        this.__proto__.__proto__ = $(jq_selector);
+    }
+
+    addComponent(component, context)
+    {
+        if (! (component instanceof Component))
+        {
+            throw new Error("component is not instance of Component")
+        }
+        let html = component.render(context || {});
+        this.append(html);
+        return this;
+    }
+}
+
 function print(msg, color)
 {
     console.log(`%c${msg}`, `color:${color}`);
@@ -16,16 +78,37 @@ Array.prototype.remove = function() {
 
 class Component
 {
-	constructor(template)
+	constructor(template, name)
     {
         this.tag_class;
         this.parser = new Parser(template);
+        this.name = name || "UNKNOWN";
+        this.cache = false;
+    }
+    static generateContext(context)
+    {
+        let eval_var_ctx = "";
+        for (let varname of Object.keys(context || {}))
+        {
+            eval_var_ctx += `let ${varname} = context.${varname};\n`;
+        }
+        return eval_var_ctx;
     }
 
 	render(context)
     {
+        let html = "";
 
-		let html = ""
+        if (this.cache)
+        {
+            for (let renderable of this.cache)
+            {
+                html += renderable.render(context);
+            }
+            return html;
+        }
+        this.cache = [];
+
         let prs = this.parser;
 
 		while (prs.hasNext())
@@ -39,15 +122,43 @@ class Component
             }
 			if (this.tag_class && this.tag_class.isCompoundStart())
             {
-				let block = prs.readBlock()
-				html += block.render(context)
-                console.log("block: ", block);
+                try
+                {
+                    let block = prs.readBlock()
+                    this.cache.push(new RenderableHtmlWrapper(html));
+                    html = "";
+                    this.cache.push(block);
+    				//html += block.render(context)
+                    console.log("block: ", block);
+                }
+                catch (e)
+                {
+                    console.log("could not parse block");
+                    print(prs.getDebugTextPeek(), "red");
+                    console.log("line " + prs.line + " of " + this.name);
+                    console.log("error", e);
+                    throw e;
+                }
+
             }
 			else if (this.tag_class)
             {
+                try{
                 let tag = prs.readTag()
                 console.log("standalone tag: ", tag);
-				html += tag.render(context);
+				//html += tag.render(context);
+                this.cache.push(new RenderableHtmlWrapper(html));
+                html = "";
+                this.cache.push(tag);
+                }
+                catch (e)
+                {
+                    console.log("could not parse Tag:");
+                    print(prs.getDebugTextPeek(), "red");
+                    console.log("line " + prs.line + " of " + this.name);
+                    console.log("error", e);
+                    throw e;
+                }
             }
             else
             {
@@ -55,7 +166,10 @@ class Component
                 prs.next();
             }
         }
-		return html
+        if (html)
+            this.cache.push(new RenderableHtmlWrapper(html));
+
+		return this.render(context);
     }
 }
 
@@ -136,7 +250,6 @@ class Tag
 
     createCompound()
     {
-        console.log(this);
         return new this.constructor.compoundClass();
     }
 
@@ -165,15 +278,6 @@ class Tag
         throw new Error("Not Implenemted")
     }
 
-    generateContext(context)
-    {
-        let eval_var_ctx = "";
-        for (let varname of Object.keys(context || {}))
-        {
-            eval_var_ctx += `let ${varname} = context.${varname};\n`;
-        }
-        return eval_var_ctx;
-    }
     // default evaluation behaviour.
     // will just eval expression within passed context
     // should be overridden for sure
@@ -181,7 +285,7 @@ class Tag
     {
         //if (!context)
         //throw new Error("Stack trace");
-        return eval(this.generateContext(context) + this.clean());
+        return eval(Component.generateContext(context) + this.clean());
     }
 }
 
@@ -192,6 +296,15 @@ class Parser
     {
         this.ptr = ptr || 0;
     	this.content = content;
+        this.line = 0;
+    }
+
+    getDebugTextPeek()
+    {
+        return this.content.substring(
+            Math.max(0, this.ptr-50),
+            Math.min(this.content.length-1, this.ptr+50)
+        );
     }
 
     hasNext()
@@ -202,6 +315,10 @@ class Parser
     next()
     {
         this.ptr++;
+        if (this.get() == "\n")
+        {
+            this.line++;
+        }
     }
 
     get()
@@ -296,8 +413,8 @@ class Parser
 
                 let tagObj = new tag(content);
 
-                print("tag read done: ", "green")
-                console.log(tagObj, "end: ", ptr, "ptr", this.ptr);
+                print(`tag read done at line: ${this.line}`, "green")
+                console.log(tagObj);
 
                 return tagObj;
             }
@@ -392,10 +509,6 @@ class Parser
                     contentRenderable.add(this.readTag());
                     html = "";
                 }
-                else
-                {
-                    console.log("tag", this.tag_class.name, "belongs to compound");
-                }
             }
 
 			if (this.compoundHasRelatedTagNext(block))
@@ -433,7 +546,6 @@ class Parser
 			let compound = this.readCompound(block)
 			block.add(compound)
 		}
-        console.log("\n\n FOUND END TAG \n\n");
 		this.readTag() // move pointer from end tag
         print("block:", "green");
         console.log(block);
@@ -444,7 +556,7 @@ class Parser
 
 // All tags that inherit from FilteredTag
 // will be preprocessed in constructor
-window.filters = {"enumerate": (a)=>a.entries(), "test": (a)=>"test:"+a };
+window[filter_scope] = {"enumerate": (a)=>a.entries(), "test": (a)=>"test:"+a };
 class FilteredTag extends Tag
 {
     static filterOperator = ">>";
@@ -475,7 +587,7 @@ class FilteredTag extends Tag
             let last_val = match_segment.match(`(?<=${this.filterOperator}\\s*)\\S.*`)
 
             processed_expr += expression.substring(expr_process_end_idx, match.index);
-            processed_expr += `filters.${last_val}(${first_val})`
+            processed_expr += `${filter_scope}.${last_val}(${first_val})`
             expr_process_end_idx = match.index + match_segment.length;
         }
         return processed_expr;
@@ -498,7 +610,6 @@ class Compound
 
     render(context)
     {
-        console.log("\t\trender", this.head, this.content);
         return this.head.render(context) + this.content.render(context);
     }
 }
@@ -520,7 +631,6 @@ class Block
 
     render()
     {
-        console.log(this.compounds);
         throw new Error("Not Implenemted")
     }
 }
@@ -541,7 +651,7 @@ class LogicalTag extends FilteredTag
 {
     evaluate(context)
     {
-        let ctx = this.generateContext(context)
+        let ctx = Component.generateContext(context)
         let expr = this.clean();
         let executable = `!!(${expr})`;
         return eval(ctx + executable)
@@ -553,6 +663,11 @@ class LetTag extends FilteredTag
     static related_tags = []
     static modifier = "$";
     static tag_name = "let";
+
+    constructor(content)
+    {
+        super(content)
+    }
 
     static isCompoundStart()
     {
@@ -577,14 +692,12 @@ class LetTag extends FilteredTag
 
             if (mode == "=")
             {
-                let eval_ctx = this.generateContext(context);
+                let eval_ctx = Component.generateContext(context);
                 let value;
-                try
-                {
-                    value = eval(eval_ctx + "\n" + expr);
-                } catch
-                {}
-                context[x_var] = value;
+
+                let val = getValue(expr, context);
+                context[x_var] = val
+                //context[x_var] = value;
             }
         }
     }
@@ -592,7 +705,6 @@ class LetTag extends FilteredTag
     render(context)
     {
         this.evaluate(context);
-        console.log(context);
         return "";
     }
 }
@@ -695,6 +807,8 @@ class EndIfTag extends Tag
 class ForBlock extends Block
 {
     static mainTagClass = ForTag;
+    static iterateOperator = "of"
+    static unpackVarnamesRegex = `[^\\s^,]*(?=\\s*[,\\s])`;
 
     render(context)
     {
@@ -702,19 +816,49 @@ class ForBlock extends Block
 
         for (let comp of this.compounds)
         {
-            let expr = comp.head.clean().split(" ").remove("");
-            // {$ for x of y $}
-            if (expr.length == 3 && expr[1] == "of")
+            let expr = comp.head.clean()
+            if (!expr.includes(ForBlock.iterateOperator))
             {
-                let y_var = expr[2];
-                let x_var = expr[0];
-                for (let x of context[y_var])
-                {
-                    context[x_var] = x;
-                    console.log("new context", context);
-                    html += comp.content.render(context);
+                return;
+            }
+
+            let [lval, rval] = expr.split(ForBlock.iterateOperator)
+            let varnames = [];
+
+            for (let vname of lval.matchAll(ForBlock.unpackVarnamesRegex))
+            {
+                if (vname[0]){
+                    varnames.push(vname[0]);
                 }
             }
+            // {$ for x of y $}
+
+            let iterable = getValue(rval, context);
+
+            for (let packed of iterable)
+            {
+                if (packed instanceof Array && varnames.length != packed.length)
+                {
+                    throw new Error(`Expected ${varnames.length} args but got ${packed.length}`)
+                }
+
+                for (let [i, varname] of varnames.entries())
+                {
+                    let value;
+                    if (packed instanceof Array)
+                    {
+                        value = packed[i];
+                    }
+                    else
+                    {
+                        value = packed;
+                    }
+                    context[varname] = value;
+                }
+                html += comp.content.render(context);
+            }
+            delete context.temp_iterator;
+
         }
         return html;
     }
@@ -857,22 +1001,3 @@ class BlockManager
         return tag.mainTagClass.blockClass;
     }
 }
-
-var test = new Component(`a == {% a %}`)
-let imageViewer = new Component(`
-    {$ for x of b $}
-        {$ if x != 3 $}
-            (x: {% x %})
-        {$ else $}
-            (x is three)
-        {$ endif $}
-    {$ endfor $}
-    {$ let variable = 42 $}
-    {% variable %}
-    {% include test %}
-    {% 1 >> test %}
-    `
-)
-
-let html = imageViewer.render({a: "something", b: [1,2,3], comp: test})
-document.getElementById("container").innerHTML = html;
