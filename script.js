@@ -177,7 +177,7 @@ class Component
         this.cache = false;
     }
 
-    static getLocalContext(glob_context)
+    static getLocalContext(render_context)
     {
         let flat = {};
         for (let scope of getScope(localvarstack_scope))
@@ -189,7 +189,7 @@ class Component
                 }
             }
         }
-        return {...glob_context, ...flat};
+        return {...render_context, ...flat};
     }
 
     static generateContext(context)
