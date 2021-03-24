@@ -20,6 +20,24 @@
 
         </div>
     </body>
-    <script type="text/javascript" src="script.js">
+    <script type="text/javascript" src="script.js"></script>
+    <script type="text/javascript" src="tags.js"></script>
+    <script type="text/javascript" src="evaluate/BaseExpression.js"></script>
+    <script type="text/javascript" src="evaluate/expressions.js"></script>
+    <script type="text/javascript" src="evaluate/CallableExpression.js"></script>
+    <script type="text/javascript" src="evaluate/ChainedExpression.js"></script>
+    <script type="text/javascript" src="evaluate/VariableExpression.js"></script>
+
+    <script>
+    new Element("body").addComponent(
+        new Component(`
+            {% a %}
+            {$ if a $}
+            true
+            {$ else $}
+            false
+            {$ endif $}
+            `),
+        {a: 0})
     </script>
 </html>

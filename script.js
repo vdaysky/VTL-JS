@@ -1,6 +1,13 @@
 const filter_scope = "vtl.filters";
 const localvarstack_scope = "vtl.locals"
 
+class ClassNameResolver
+{
+    static resolve(name)
+    {
+        return eval(name);
+    }
+}
 
 function getScope(scope, init_with)
 {
@@ -95,23 +102,36 @@ function emptyStack()
 
 function getValue(name, context)
 {
+    console.log("find variable", name);
     // serch for var everywhere
     let global_var = window[name];
     let context_var = context[name];
     let stack_var = findInStack(name);
-    if (context_var || stack_var || global_var)
-    {
-        // if global var was required, save it as local copy
-        return context[name] = context_var || stack_var || global_var;
-    }
+    let chain_var = context.__chain_parent ? context.__chain_parent[name] : undefined;
+
+    if (context_var != undefined)
+        return context_var
+    if (stack_var != undefined)
+        return stack_var
+    if (global_var != undefined)
+        return global_var
+    if (chain_var != undefined)
+        return chain_var
 
     if (name.includes("."))
     {
         let path = ""
         let parts = name.split(".")
-        let obj = window;
+        let obj;
+        let first = true;
         for (let child of parts)
         {
+            if (first)
+            {
+                first = false;
+                obj = getValue(child, context);
+                continue;
+            }
             obj = obj[child];
             if (!obj)
             {
@@ -120,16 +140,12 @@ function getValue(name, context)
         }
         if (obj)
         {
-            context[name] = obj;
             return obj;
         }
     }
 
-    // evaluate expressions
-    // TODO: replace with filters
-    let context_text = Component.generateContext(context);
-    eval(`${context_text}\ncontext.temp_var = ${name}`)
-    return context.temp_var;
+    // variable was not found :(
+    return undefined;
 }
 
 class Element
@@ -177,7 +193,7 @@ class Component
         this.cache = false;
     }
 
-    static getLocalContext(render_context)
+    static getContext(render_context)
     {
         let flat = {};
         for (let scope of getScope(localvarstack_scope))
@@ -190,18 +206,6 @@ class Component
             }
         }
         return {...render_context, ...flat};
-    }
-
-    static generateContext(context)
-    {
-        let eval_var_ctx = "";
-
-        for (let varname of Object.keys( context || {} ))
-        {
-            eval_var_ctx += `let ${varname} = context.${varname};\n`;
-        }
-
-        return eval_var_ctx;
     }
 
 	render(context)
@@ -315,111 +319,14 @@ class RenderableContent
     }
 }
 
-class Tag
-{
-    // some static things here
-    static related_tags = ["not Implemented"]
-    static modifier = "not Implemented";
-    static tag_name = "not Implemented";
 
-    static compoundClass;
-    static closeTagClass = null;
-    static mainTagClass = null;
 
-    static tagEndPrefix = "end";
-
-    constructor(content)
-    {
-        this.content = content;
-    }
-
-    static isCompoundStart()
-    {
-        throw new Error("Not Implenemted")
-    }
-
-    static isCompoundEnd()
-    {
-        throw new Error("Not Implenemted")
-    }
-
-    static isCompoundable()
-    {
-        return !!this.mainTagClass?.compoundClass;
-    }
-
-    // returns opening of tag: {% if
-    static getTagStart()
-    {
-        return `{${this.modifier}${this.isCompoundEnd()?this.tagEndPrefix:""}${this.tag_name}`
-    }
-
-    // returns closing part of tag: $}
-    static getTagEnd()
-    {
-        return `${this.modifier}}`
-    }
-
-    static getClosingClass()
-    {
-        return this.closeTagClass;
-    }
-
-    createCompound()
-    {
-        return new this.constructor.compoundClass();
-    }
-
-    clean()
-    {
-        let clean = "";
-        let parser = new Parser(this.content);
-
-        let skip_open_tag = parser.hasSequenceNext(this.constructor.getTagStart());
-        let skip_end_tag = false;
-        while (skip_end_tag == false && parser.hasNext())
-        {
-            skip_end_tag = parser.hasSequenceNext(this.constructor.getTagEnd());
-            parser.next();
-        }
-
-        // idk why +1 needs to be there
-        // seems to work tho
-        clean = this.content.substring(skip_open_tag+1, this.content.length - skip_end_tag);
-        return clean;
-    }
-
-    // used to display html and to do additional processing
-    render(context)
-    {
-        throw new Error("Not Implenemted")
-    }
-
-    // default evaluation behaviour.
-    // will just eval expression within passed context
-    // should be overridden for sure
-    evaluate(context)
-    {
-        //if (!context)
-        //throw new Error("Stack trace");
-        let ctx = Component.getLocalContext(context);
-        let strCtx = Component.generateContext(ctx);
-        let oldctx = context
-        // swap contexts so local variables will be defined in global context
-        context = ctx;
-        let res = eval(strCtx + this.clean());
-        // and then swap back
-        context = oldctx
-        return res;
-
-    }
-}
-
-class Parser
+class Parser extends ClassNameResolver
 {
 
     constructor(content, ptr)
     {
+        super();
         this.ptr = ptr || 0;
     	this.content = content;
         this.line = 0;
@@ -494,18 +401,18 @@ class Parser
             return false;
             //throw new Error("trying to read next tag when there is no tag")
         }
-
-        let mainTag = block.constructor.mainTagClass;
+        let mainTag = this.constructor.resolve(block.constructor.mainTagClass);
 
 
 		for (let tagClass of mainTag.related_tags) {
-            let tag = this.hasTagNext(tagClass);
+            let cls = this.constructor.resolve(tagClass);
+            let tag = this.hasTagNext(cls);
 			if (tag){
 				return tag
             }
         }
-		return mainTag?.getClosingClass() &&
-        this.hasTagNext( mainTag.getClosingClass() )
+		return this.constructor.resolve(mainTag?.getClosingClass()) &&
+        this.hasTagNext( this.constructor.resolve(mainTag.getClosingClass()) )
     }
 
     // returns whole tag constructon wrapped in tag obj:
@@ -679,47 +586,6 @@ class Parser
 	}
 }
 
-// All tags that inherit from FilteredTag
-// will be preprocessed in constructor
-let filters = {"enumerate": (a)=>a.entries()};
-setScope(filter_scope, filters)
-
-class FilteredTag extends Tag
-{
-    static filterOperator = ">>";
-
-    constructor(content)
-    {
-        super(content);
-        this.content = FilteredTag.apply(this.clean())
-    }
-
-    static apply(expression)
-    {
-        let parser = new Parser(expression);
-
-        let pre_filter = "";
-        if (!expression.includes(this.filterOperator))
-        {
-            return expression
-        }
-
-        let matches = expression.matchAll(`[^\\s]*\\s*${this.filterOperator}\\s*[^\\s]*`);
-        let processed_expr = "";
-        let expr_process_end_idx = 0;
-        for (let match of matches)
-        {
-            let match_segment = match[0];
-            let first_val = match_segment.match(`^[^\\s]*`)
-            let last_val = match_segment.match(`(?<=${this.filterOperator}\\s*)\\S.*`)
-
-            processed_expr += expression.substring(expr_process_end_idx, match.index);
-            processed_expr += `${filter_scope}.${last_val}(${first_val})`
-            expr_process_end_idx = match.index + match_segment.length;
-        }
-        return processed_expr;
-    }
-}
 
 // this thing is used just to keep data together
 class Compound
@@ -739,8 +605,6 @@ class Compound
         return this.head.render(context) + this.content.render(context);
     }
 }
-
-Tag.compoundClass = Compound;
 
 class Block
 {
@@ -773,371 +637,38 @@ class RenderableHtmlWrapper
     }
 }
 
-class LogicalTag extends FilteredTag
-{
-    evaluate(context)
-    {
-        let ctx = Component.generateContext(context)
-        let expr = this.clean();
-        let executable = `!!(${expr})`;
-        return eval(ctx + executable)
-    }
-}
-
-class LetTag extends FilteredTag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "let";
-
-    constructor(content)
-    {
-        super(content)
-    }
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-
-    evaluate(context)
-    {
-        let cont = this.clean();
-        let parts = cont.split(" ")
-        parts.remove("")
-        if (parts.length == 3)
-        {
-            let x_var = parts[0];
-            let mode = parts[1];
-            let expr = parts[2];
-
-            if (mode == "=")
-            {
-                let eval_ctx = Component.generateContext(context);
-                let value;
-
-                let val = getValue(expr, context);
-                addLocal(x_var, val);
-                //context[x_var] = val
-                //context[x_var] = value;
-            }
-        }
-    }
-
-    render(context)
-    {
-        this.evaluate(context);
-        return "";
-    }
-}
-
 // implementations
-class ForTag extends FilteredTag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "for";
-    static mainTagClass = ForTag;
-    static closeTagClass; // set later
-    static blockClass; // set later
 
-    static isCompoundStart()
-    {
-        return true;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-}
-
-class EndForTag extends Tag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "for";
-    static mainTagClass = ForTag;
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return true;
-    }
-}
-
-class ElseIfTag extends LogicalTag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "elseif";
-    static mainTagClass; // set later
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-}
-
-class ElseTag extends LogicalTag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "else";
-    static mainTagClass; // set later
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-}
-
-class EndIfTag extends Tag
-{
-    static related_tags = []
-    static modifier = "$";
-    static tag_name = "if";
-    static mainTagClass; // set later
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return true;
-    }
-}
-
-class ForBlock extends Block
-{
-    static mainTagClass = ForTag;
-    static iterateOperator = "of"
-    static unpackVarnamesRegex = `[^\\s^,]*(?=\\s*[,\\s])`;
-
-    render(context)
-    {
-        let html = "";
-
-        for (let comp of this.compounds)
-        {
-            let expr = comp.head.clean()
-            if (!expr.includes(ForBlock.iterateOperator))
-            {
-                return;
-            }
-
-            let [lval, rval] = expr.split(ForBlock.iterateOperator)
-            let varnames = [];
-
-            for (let vname of lval.matchAll(ForBlock.unpackVarnamesRegex))
-            {
-                if (vname[0]){
-                    varnames.push(vname[0]);
-                }
-            }
-            // {$ for x of y $}
-
-            let iterable = getValue(rval, context);
-
-            for (let packed of iterable)
-            {
-                if (packed instanceof Array && varnames.length != packed.length)
-                {
-                    throw new Error(`Expected ${varnames.length} args but got ${packed.length}`)
-                }
-
-                for (let [i, varname] of varnames.entries())
-                {
-                    let value;
-                    if (packed instanceof Array)
-                    {
-                        value = packed[i];
-                    }
-                    else
-                    {
-                        value = packed;
-                    }
-                    context[varname] = value;
-                }
-                html += comp.content.render(context);
-            }
-            delete context.temp_iterator;
-
-        }
-        return html;
-    }
-}
-
-ForTag.blockClass = ForBlock;
-ForTag.closeTagClass = EndForTag;
-
-class IfBlock extends Block
-{
-    static mainTagClass;
-
-    render(context)
-    {
-        let html = "";
-
-        for (let comp of this.compounds)
-        {
-
-            let bool = (comp.head instanceof ElseTag) || comp.head.evaluate(context);
-
-            if (bool)
-            {
-                html += comp.content.render(context);
-                break;
-            }
-        }
-        return html;
-    }
-}
-
-class IfTag extends LogicalTag
-{
-    static related_tags = [ElseIfTag, ElseTag]
-    static modifier = "$";
-    static tag_name = "if";
-    static closeTagClass = EndIfTag;
-    static mainTagClass = IfTag;
-    static blockClass = IfBlock;
-
-
-    static isCompoundStart()
-    {
-        return true;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-}
-
-class IncludeTag extends FilteredTag
-{
-    static related_tags = []
-    static modifier = "%";
-    static tag_name = "include";
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-
-    render(context)
-    {
-        let template_name = this.clean().replaceAll(" ", "");
-        let component = context[template_name] || window[template_name];
-        if (!component)
-        {
-            return "invalid component";
-        }
-        return component.render(context);
-    }
-}
-
-EndIfTag.mainTagClass = IfTag;
-ElseIfTag.mainTagClass = IfTag;
-IfBlock.mainTagClass = IfTag;
-ElseTag.mainTagClass = IfTag;
-
-
-class ExecuteTag extends FilteredTag
-{
-    static related_tags = []
-    static modifier = "%";
-    static tag_name = ""; // execute tag does not have any keyword
-
-    static isCompoundStart()
-    {
-        return false;
-    }
-
-    static isCompoundEnd()
-    {
-        return false;
-    }
-
-    render(context)
-    {
-        let val = this.evaluate(context);
-        return val;
-    }
-}
-
-class TagManager
+class TagManager extends ClassNameResolver
 {
     // execute tag should be last since it does not have prefix.
     // that means execute tag will match anything
     static registered_tags = [
-        LetTag, IncludeTag, ExecuteTag,
-        IfTag, EndIfTag, ElseIfTag, ElseTag,
-        ForTag, EndForTag
+        "LetTag", "IncludeTag", "ExecuteTag",
+        "IfTag", "EndIfTag", "ElseIfTag", "ElseTag",
+        "ForTag", "EndForTag"
     ];
     static getTagClass(content, ptr)
     {
-
         for (let tagClass of this.registered_tags)
         {
             let parser = new Parser(content, ptr)
 
-            if (parser.hasTagNext(tagClass))
+            let cls = this.resolve(tagClass);
+            if (parser.hasTagNext(cls))
             {
-                console.log(content.substring(ptr, ptr+10) + "...", "is", tagClass.name);
-                return tagClass;
+                console.log(content.substring(ptr, ptr+10) + "...", "is", cls.name);
+                return cls;
             }
         }
         return false;
     }
 }
 
-class BlockManager
+class BlockManager extends ClassNameResolver
 {
     static getBlockClass(tag)
     {
-        return tag.mainTagClass.blockClass;
+        return this.resolve(this.resolve(tag.mainTagClass).blockClass);
     }
 }
-
-new Element("body").addComponent(
-    new Component(`
-        {$ if true $}
-            {$ let temp = 69 $}
-            {$ if true $}
-                {% a %}
-                {% temp %}
-            {$ endif $}
-            {% temp %}
-        {$ endif $}
-
-
-        `),
-    {a: 42})
