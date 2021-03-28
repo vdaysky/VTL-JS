@@ -57,7 +57,7 @@ class Tag extends ClassNameResolver
     clean()
     {
         let clean = "";
-        let parser = new Parser(this.content);
+        let parser = new TagParser(this.content);
 
         let skip_open_tag = parser.hasSequenceNext(this.constructor.getTagStart());
         let skip_end_tag = false;
@@ -88,7 +88,8 @@ class Tag extends ClassNameResolver
     evaluate(render_context)
     {
         let context = Component.getContext(render_context);
-        return Expression.construct(this.clean()).evaluate(context);
+        let parser = new ExpressionParser(this.clean());
+        return parser.parse().evaluate(context);
     }
 }
 
@@ -108,7 +109,7 @@ class FilteredTag extends Tag
 
     static apply(expression)
     {
-        let parser = new Parser(expression);
+        let parser = new TagParser(expression);
 
         let pre_filter = "";
 
@@ -135,7 +136,7 @@ class LogicalTag extends FilteredTag
     {
         let context = Component.getContext(render_context)
         let expr = this.clean();
-        return !!Expression.construct(expr).evaluate(context);
+        return !!Operand.construct(expr).evaluate(context);
     }
 }
 

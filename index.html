@@ -22,22 +22,35 @@
     </body>
     <script type="text/javascript" src="script.js"></script>
     <script type="text/javascript" src="tags.js"></script>
-    <script type="text/javascript" src="evaluate/BaseExpression.js"></script>
-    <script type="text/javascript" src="evaluate/expressions.js"></script>
-    <script type="text/javascript" src="evaluate/CallableExpression.js"></script>
-    <script type="text/javascript" src="evaluate/ChainedExpression.js"></script>
-    <script type="text/javascript" src="evaluate/VariableExpression.js"></script>
+
+    <script type="text/javascript" src="evaluate/BaseOperand.js"></script>
+    <script type="text/javascript" src="evaluate/VariableOperand.js"></script>
+    <script type="text/javascript" src="evaluate/Literals.js"></script>
+    <script type="text/javascript" src="evaluate/Enumeration.js"></script>
+    <script type="text/javascript" src="evaluate/Expression.js"></script>
+    <script type="text/javascript" src="evaluate/AnyOperand.js"></script>
+
+    <script type="text/javascript" src="parse/BaseParser.js"></script>
+    <script type="text/javascript" src="parse/ParsedExpression.js"></script>
+    <script type="text/javascript" src="parse/parsers.js"></script>
+    <script type="text/javascript" src="parse/BraceBlocks.js"></script>
+
+    <script type="text/javascript" src="operator/BaseOperator.js"></script>
+    <script type="text/javascript" src="operator/PlusOperator.js"></script>
+    <script type="text/javascript" src="operator/DotOperator.js"></script>
+    <script type="text/javascript" src="operator/CallOperator.js"></script>
+    <script type="text/javascript" src="operator/CommaOperator.js"></script>
+    <script type="text/javascript" src="operator/EqualsOperator.js"></script>
+
+    <script type="text/javascript" src="typeWrappers/ArrayWrapper.js"></script>
+
 
     <script>
     new Element("body").addComponent(
         new Component(`
-            {% a %}
-            {$ if a $}
-            true
-            {$ else $}
-            false
-            {$ endif $}
+            {% a + b %}
+
             `),
-        {a: 0})
+        {a: 2, b:40})
     </script>
 </html>
