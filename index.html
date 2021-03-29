@@ -8,6 +8,7 @@
         <meta charset="utf-8">
         <title></title>
 
+<div id="table-container"></div>
 
     </head>
     <body>
@@ -20,37 +21,52 @@
 
         </div>
     </body>
+
     <script type="text/javascript" src="script.js"></script>
-    <script type="text/javascript" src="tags.js"></script>
+    <script type="text/javascript" src="lib/blocks/IfBlock.js"></script>
+    <script type="text/javascript" src="lib/blocks/ForBlock.js"></script>
 
-    <script type="text/javascript" src="evaluate/BaseOperand.js"></script>
-    <script type="text/javascript" src="evaluate/VariableOperand.js"></script>
-    <script type="text/javascript" src="evaluate/Literals.js"></script>
-    <script type="text/javascript" src="evaluate/Enumeration.js"></script>
-    <script type="text/javascript" src="evaluate/Expression.js"></script>
-    <script type="text/javascript" src="evaluate/AnyOperand.js"></script>
+    <script type="text/javascript" src="lib/tags/BaseTag.js"></script>
+    <script type="text/javascript" src="lib/tags/LogicalTagBase.js"></script>
+    <script type="text/javascript" src="lib/tags/LetTag.js"></script>
+    <script type="text/javascript" src="lib/tags/IfTag.js"></script>
+    <script type="text/javascript" src="lib/tags/ElseIfTag.js"></script>
+    <script type="text/javascript" src="lib/tags/ElseTag.js"></script>
+    <script type="text/javascript" src="lib/tags/EndIfTag.js"></script>
+    <script type="text/javascript" src="lib/tags/ForTag.js"></script>
+    <script type="text/javascript" src="lib/tags/EndForTag.js"></script>
+    <script type="text/javascript" src="lib/tags/IncludeTag.js"></script>
+    <script type="text/javascript" src="lib/tags/ExecuteTag.js"></script>
 
-    <script type="text/javascript" src="parse/BaseParser.js"></script>
-    <script type="text/javascript" src="parse/ParsedExpression.js"></script>
-    <script type="text/javascript" src="parse/parsers.js"></script>
-    <script type="text/javascript" src="parse/BraceBlocks.js"></script>
+    <script type="text/javascript" src="lib/evaluate/BaseOperand.js"></script>
+    <script type="text/javascript" src="lib/evaluate/VariableOperand.js"></script>
+    <script type="text/javascript" src="lib/evaluate/Literals.js"></script>
+    <script type="text/javascript" src="lib/evaluate/Enumeration.js"></script>
+    <script type="text/javascript" src="lib/evaluate/Expression.js"></script>
+    <script type="text/javascript" src="lib/evaluate/AnyOperand.js"></script>
 
-    <script type="text/javascript" src="operator/BaseOperator.js"></script>
-    <script type="text/javascript" src="operator/PlusOperator.js"></script>
-    <script type="text/javascript" src="operator/DotOperator.js"></script>
-    <script type="text/javascript" src="operator/CallOperator.js"></script>
-    <script type="text/javascript" src="operator/CommaOperator.js"></script>
-    <script type="text/javascript" src="operator/EqualsOperator.js"></script>
+    <script type="text/javascript" src="lib/parse/BaseParser.js"></script>
+    <script type="text/javascript" src="lib/parse/ParsedExpression.js"></script>
+    <script type="text/javascript" src="lib/parse/parsers.js"></script>
+    <script type="text/javascript" src="lib/parse/BraceBlocks.js"></script>
 
-    <script type="text/javascript" src="typeWrappers/ArrayWrapper.js"></script>
+    <script type="text/javascript" src="lib/operator/BaseOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/PlusOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/DotOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/CallOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/CommaOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/EqualsOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/MinusOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/MultiplicationOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/DivisionOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/FilterOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/logical/OrOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/logical/NotOperator.js"></script>
+    <script type="text/javascript" src="lib/operator/NewOperator.js"></script>
 
+    <script type="text/javascript" src="lib/typeWrappers/ArrayWrapper.js"></script>
 
-    <script>
-    new Element("body").addComponent(
-        new Component(`
-            {% a + b %}
+    <script type="text/javascript" src="lib/tests/templates/components.js"></script>
+    <script type="text/javascript" src="testOptions.js"></script>
 
-            `),
-        {a: 2, b:40})
-    </script>
 </html>

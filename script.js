@@ -1,6 +1,25 @@
 const filter_scope = "vtl.filters";
 const localvarstack_scope = "vtl.locals"
 
+const MOBILE_ONLY=1, DESKTOP_ONLY=2, UNIVERSAL=3;
+
+var ADMIN = true;
+var isMobile = () => true;
+class CManager
+{
+    static register(component, name, mode)
+    {
+        console.log(component, name, mode);
+        if (mode == UNIVERSAL ||
+           (mode == MOBILE_ONLY && isMobile() ||
+            mode == DESKTOP_ONLY && !isMobile()))
+            {
+                this[name] = component;
+                component.name = name;
+            }
+    }
+}
+
 class ClassNameResolver
 {
     static resolve(name)
@@ -53,9 +72,10 @@ function findInStack(name)
     return value;
 }
 
-function setInScope(scope, varname, value)
+function setInScope(scope_name, varname, value)
 {
-    getScope(scope)[varname] = value;
+    let scope = getScope(scope_name, {});
+    scope[varname] = value;
 }
 
 function setScope(scope, object)
@@ -147,6 +167,7 @@ function getValue(name, context)
     }
 
     // variable was not found :(
+    throw new Error("[VTL] " +name + " is not defined")
     return undefined;
 }
 
@@ -305,7 +326,7 @@ class RenderableContent
 
     render(context)
     {
-        console.log("add to stack");
+        console.log("add local stack scope");
         addOnContextStack();
 
         let html = "";
@@ -316,7 +337,7 @@ class RenderableContent
         }
 
         popContextStack();
-        console.log("pop from stack");
+        console.log("pop local stack scope");
         return html;
     }
 }

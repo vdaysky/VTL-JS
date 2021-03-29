@@ -1,2 +1,4 @@
 make parsed expression brace objects be presented as other parsed expression
 to make them recursively parsable (only for round braces that change operator priorities)
+
+new ExpressionParser("a().b").parse().evaluate({a:()=>{b:1}})
