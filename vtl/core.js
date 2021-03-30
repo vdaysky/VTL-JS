@@ -1,10 +1,10 @@
 const filter_scope = "vtl.filters";
 const localvarstack_scope = "vtl.locals"
 
-const MOBILE_ONLY=1, DESKTOP_ONLY=2, UNIVERSAL=3;
-
 var ADMIN = true;
 var isMobile = () => true;
+
+const MOBILE_ONLY=1, DESKTOP_ONLY=2, UNIVERSAL=3;
 class CManager
 {
     static register(component, name, mode)
@@ -119,7 +119,8 @@ function popContextStack()
 
 function emptyStack()
 {
-    getScope(localvarstack_scope) = [];
+    let scope = getScope(localvarstack_scope)
+    scope = [];
 }
 
 function getValue(name, context)

@@ -335,49 +335,31 @@ class ExpressionParser extends Parser
     {
         this.clearTextBuffer();
         let quoted_text = "";
-        let quote = false;
+        let open_quote = {}
+        let quote = ()=>open_quote["\'"] || open_quote["\""]
 
         while(this.hasNext())
         {
             let char = this.get();
 
-            if ( (char == " " || char == "\n") && !quote)
+            if ( (char == " " || char == "\n") && !quote())
             {
                 this.saveBuffer();
                 this.next();
                 continue;
-                // let lookaheadparser = this.fork();
-                // // spaces between current position and letter
-                // // returns false if there is no letter after space
-                // let offset = lookaheadparser.hasAfterSpaces(/^[A-z_]/);
-                //
-                // if (offset !== false)
-                // {
-                //     console.log("%cspace found. offset: " + offset, "color:green");
-                //     //alert("space with char " + offset)
-                //     //add single space and jump over
-                //     //this.addToTextBuffer(" ");
-                //     this.ptr += offset;
-                //     continue;
-                // }
-                // else
-                // {
-                //     // jump over all spaces
-                //     let o = lookaheadparser.hasAfterSpaces(/^./);
-                //     this.ptr += o;
-                // }
             }
 
             //console.log("[" + this.nesting_level + "]" + " (#" + (this.curptr()) + ") " + char);
 
             // TODO escape quotes
-            if (char == '"')
+            if (char == "\"" || char == "\'")
             {
-                quote = !quote
+                open_quote[char] = !open_quote[char]
 
-                if(!quote)
+                if(!quote())
                 {
                     this.addElement(new StringLiteral(quoted_text));
+                    quoted_text="";
                 }
                 else
                 {
@@ -387,7 +369,7 @@ class ExpressionParser extends Parser
                 continue;
             }
 
-            if(quote)
+            if(quote())
             {
                 quoted_text += char;
                 this.next();
