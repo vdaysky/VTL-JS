@@ -98,9 +98,8 @@ class Tag extends ClassNameResolver
 
     // default evaluation behaviour.
     // will just eval expression within passed context
-    evaluate(render_context)
+    evaluate(context)
     {
-        let context = Component.getContext(render_context)
         if (this.isCached())
         {
             let parsed = this.parsed_cache.evaluate(context);

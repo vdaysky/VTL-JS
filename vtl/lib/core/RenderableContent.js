@@ -14,7 +14,7 @@ class RenderableContent
 
     render(context)
     {
-        addOnContextStack();
+        context.__locals__.addLayer()
 
         let html = "";
         for (let renderable of this.content)
@@ -22,7 +22,7 @@ class RenderableContent
             html += renderable.render(context);
         }
 
-        popContextStack();
+        context.__locals__.popLayer()
         return html;
     }
 }

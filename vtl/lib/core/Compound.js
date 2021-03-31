@@ -9,7 +9,6 @@ class Compound
         }
         this.head = head;
         this.content = content;
-        console.log(this);
     }
 
     render(context)

@@ -6,43 +6,45 @@ class Component
         this.parser = new TagParser(template);
         this.name = name || "UNKNOWN";
         this.cache = false;
+
+		// make each component own a stack
+		// in hope for async rendering
+		this.stack = new Stack();
     }
 
 	isCached()
 	{
 		return this.cache;
 	}
-    static getContext(render_context)
-    {
-        let flat = {};
-        for (let scope of getScope(localvarstack_scope))
-        {
-            for (let varname of Object.keys(scope))
-            {
-                if (scope[varname]){
-                    flat[varname] = scope[varname]
-                }
-            }
-        }
-        return {...render_context, ...flat};
-    }
 
 	render(context)
     {
-        let html = "";
-        addOnContextStack();
-
         if (this.isCached())
         {
+			let rendered_html = "";
+
+			if (context.__locals__)
+			{
+				// render was called by another component (include tag)
+				// inherit stack
+				this.stack = context.__locals__.clone();
+			}
+			else
+			{
+				context.__locals__ = this.stack;
+			}
+
             for (let renderable of this.cache)
             {
-                html += renderable.render(context);
+                rendered_html += renderable.render(context);
             }
-            return html;
+			this.stack.empty();
+            return rendered_html;
         }
         this.cache = [];
 
         let prs = this.parser;
+		let html = "";
 
 		while (prs.hasNext())
         {

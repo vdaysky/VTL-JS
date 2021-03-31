@@ -28,13 +28,11 @@ class LetTag extends Tag
 
 
     // overrides caching mechanism of base tag class
-    evaluate(render_context)
+    evaluate(context)
     {
-        let context = Component.getContext(render_context)
-
         if (this.isCached())
         {
-            addLocal(this.cached_lvalue, this.cached_rvalue.evaluate(context));
+            context.__locals__.put(this.cached_lvalue, this.cached_rvalue.evaluate(context));
             return;
         }
 
@@ -67,7 +65,7 @@ class LetTag extends Tag
         let parsed = new ExpressionParser(rvalue).parse();
         this.cached_rvalue = parsed;
         this.cached_lvalue = lvalue;
-        return this.evaluate(context);  
+        return this.evaluate(context);
     }
 
     render(context)

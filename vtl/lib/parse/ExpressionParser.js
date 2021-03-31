@@ -212,7 +212,6 @@ class ExpressionParser extends Parser
         }
         this.saveBuffer();
         let done_in = Date.now() - start_time;
-        console.log("parse done in", done_in, "ms");
         total_render_time += done_in;
         return new ParsedExpression(this.parsed);
     }

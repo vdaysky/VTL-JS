@@ -4,38 +4,25 @@ class ForBlock extends Block
     static iterateOperator = "of"
     static unpackVarnamesRegex = `[^\\s^,]*(?=\\s*[,\\s])`;
 
+    isCached(){
+        return this.cached_rvalue instanceof ParsedExpression;
+    }
     render(context)
     {
-        let html = "";
+        let comp = this.compounds[0];
 
-        for (let comp of this.compounds)
+        if (this.isCached())
         {
-            let expr = comp.head.clean()
-            if (!expr.includes(ForBlock.iterateOperator))
-            {
-                return;
-            }
-
-            let [lval, rval] = expr.split(ForBlock.iterateOperator)
-            let varnames = [];
-            for (let vname of lval.matchAll(ForBlock.unpackVarnamesRegex))
-            {
-                if (vname[0]){
-                    varnames.push(vname[0]);
-                }
-            }
-            // {$ for x of y $}
-
-
-            let iterable = new ExpressionParser(rval).parse().evaluate(context)//getValue(rval, context);
+            let html = "";
+            let iterable = this.cached_rvalue.evaluate(context)//getValue(rval, context);
             for (let packed of iterable)
             {
-                if (packed instanceof Array && varnames.length != packed.length)
+                if (packed instanceof Array && this.cached_varnames.length != packed.length)
                 {
-                    throw new Error(`Expected ${varnames.length} args but got ${packed.length}`)
+                    throw new Error(`Expected ${this.cached_varnames.length} args but got ${packed.length}`)
                 }
 
-                for (let [i, varname] of varnames.entries())
+                for (let [i, varname] of this.cached_varnames.entries())
                 {
                     let value;
                     if (packed instanceof Array)
@@ -51,8 +38,26 @@ class ForBlock extends Block
                 html += comp.content.render(context);
             }
             delete context.temp_iterator;
-
+            return html;
         }
-        return html;
+
+        let expr = comp.head.clean()
+        if (!expr.includes(ForBlock.iterateOperator))
+        {
+            return;
+        }
+
+        let [lval, rval] = expr.split(ForBlock.iterateOperator)
+        let varnames = [];
+        for (let vname of lval.matchAll(ForBlock.unpackVarnamesRegex))
+        {
+            if (vname[0]){
+                varnames.push(vname[0]);
+            }
+        }
+
+        this.cached_rvalue = new ExpressionParser(rval).parse()//getValue(rval, context);
+        this.cached_varnames = varnames;
+        return this.render(context);
     }
 }

@@ -173,7 +173,7 @@ class TagParser extends Parser
         let blockClass = BlockManager.getBlockClass(opening_tag.constructor);
         let block = new blockClass();
 
-        print("======= read block " + blockClass.name + " =======", "green");
+        //print("======= read block " + blockClass.name + " =======", "green");
 
 		while (!this.peekReadTag().constructor.isCompoundEnd())
 		{
@@ -181,8 +181,8 @@ class TagParser extends Parser
 			block.add(compound)
 		}
 		this.readTag() // move pointer from end tag
-        print("block:", "green");
-        console.log(block);
+        //print("block:", "green");
+        //console.log(block);
 		return block;
 	}
 }
