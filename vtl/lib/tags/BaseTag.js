@@ -14,6 +14,13 @@ class Tag extends ClassNameResolver
     {
         super();
         this.content = content;
+        // parsed expression instance
+        this.parsed_cache;
+    }
+
+    isCached()
+    {
+        return this.parsed_cache instanceof ParsedExpression;
     }
 
     static isCompoundStart()
@@ -93,8 +100,15 @@ class Tag extends ClassNameResolver
     // will just eval expression within passed context
     evaluate(render_context)
     {
-        let context = Component.getContext(render_context);
+        let context = Component.getContext(render_context)
+        if (this.isCached())
+        {
+            let parsed = this.parsed_cache.evaluate(context);
+            return parsed;
+        }
+
         let parser = new ExpressionParser(this.clean());
-        return parser.parse().evaluate(context);
+        this.parsed_cache = parser.parse();
+        return this.evaluate(context);
     }
 }

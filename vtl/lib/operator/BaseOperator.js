@@ -39,7 +39,6 @@ class Operator extends ClassNameResolver
 
     evaluate(context, left, right)
     {
-        console.log("evaluate operator", this.constructor.name, "with", left, right);
         if ((left === undefined && (!this.constructor.accepts_undefined.includes("L")) )
         || (right === undefined && (!this.constructor.unary) &&
             !this.constructor.accepts_undefined.includes("R")))
@@ -49,7 +48,7 @@ class Operator extends ClassNameResolver
 
         let left_value = this.constructor.use_raw_left ? left.expression : (left.evaluate===undefined ? left : left.evaluate(context));
         let right_value = this.constructor.use_raw_right ? right.expression : (right === undefined ? undefined : (right.evaluate === undefined ? right : right.evaluate(context)));
-        console.log("evaluated operands:", left_value, right_value, this.constructor.use_raw_left, this.constructor.use_raw_right);
+        
         let runnable_returned = this.constructor.runnable(left_value, right_value);
 
         // rerurn operand and not just value for compatability

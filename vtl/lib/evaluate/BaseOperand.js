@@ -17,7 +17,6 @@ class Operand extends ClassNameResolver
         //    throw new Error("Expressions must be parsed list");
 
         this.expression = expression;
-        console.log("expresion creted:", expression);
     }
 
     static construct(expression)
@@ -28,7 +27,6 @@ class Operand extends ClassNameResolver
 
             if (cls.matches(expression))
             {
-                console.log("unit", expression, "is", cls.name);
                 return new cls(expression)
             }
         }
@@ -37,7 +35,6 @@ class Operand extends ClassNameResolver
 
     static matches(expr)
     {
-        console.log("test", expr, "against", this.name);
         if (this.regex){
             return this.regex.test(expr);
         }

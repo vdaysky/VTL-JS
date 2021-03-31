@@ -9,7 +9,6 @@ class Expression extends ClassNameResolver
 
     toPostfix()
     {
-        console.log("infix", this.content);
         this.postfix = true;
         let operator_stack = []
         let postfix_expr = []
@@ -43,7 +42,6 @@ class Expression extends ClassNameResolver
             }
             else
             {
-                console.log(part);
                 throw new Error("Unexpected type in parsed expr array: " + typeof part + ":" + part);
             }
         }
@@ -84,9 +82,7 @@ class Expression extends ClassNameResolver
                 let right = part.constructor.unary ? undefined : result_stack.pop();
                 let left = result_stack.pop();
 
-                console.log("run operator", part.constructor.name, left, right);
                 let result = part.evaluate(context, left, right);
-                console.log("operator returned", result);
                 if (!(result instanceof Operand))
                 {
                     console.log(result);

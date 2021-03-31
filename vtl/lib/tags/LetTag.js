@@ -7,6 +7,13 @@ class LetTag extends Tag
     constructor(content)
     {
         super(content)
+        this.cached_rvalue;
+        this.cached_lvalue;
+    }
+
+    isCached()
+    {
+        return this.cached_rvalue instanceof ParsedExpression
     }
 
     static isCompoundStart()
@@ -19,8 +26,18 @@ class LetTag extends Tag
         return false;
     }
 
+
+    // overrides caching mechanism of base tag class
     evaluate(render_context)
     {
+        let context = Component.getContext(render_context)
+
+        if (this.isCached())
+        {
+            addLocal(this.cached_lvalue, this.cached_rvalue.evaluate(context));
+            return;
+        }
+
         let cont = this.clean();
 
         let lvalue="";
@@ -46,11 +63,11 @@ class LetTag extends Tag
         }
         lvalue = this.normalizeString(lvalue);
         rvalue = this.normalizeString(rvalue);
-        console.log("let:", "'" + lvalue + "'", "'" + rvalue + "'");
 
-        let context = Component.getContext(render_context);
-        let val = new ExpressionParser(rvalue).parse().evaluate(context);
-        addLocal(lvalue, val);
+        let parsed = new ExpressionParser(rvalue).parse();
+        this.cached_rvalue = parsed;
+        this.cached_lvalue = lvalue;
+        return this.evaluate(context);  
     }
 
     render(context)
