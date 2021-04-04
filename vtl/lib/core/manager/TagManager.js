@@ -7,18 +7,29 @@ class TagManager extends ClassNameResolver
         "IfTag", "EndIfTag", "ElseIfTag", "ElseTag",
         "ForTag", "EndForTag"
     ];
+    static resolved_cache = false;
+
     static getTagClass(content, ptr)
     {
-        for (let tagClass of this.registered_tags)
+        if (this.resolved_cache)
         {
-            let parser = new TagParser(content, ptr)
-
-            let cls = this.resolve(tagClass);
-            if (parser.hasTagNext(cls))
+            for (let tagClass of this.resolved_cache)
             {
-                return cls;
+                let parser = new TagParser(content, ptr)
+
+                let cls = this.resolve(tagClass);
+                if (parser.hasTagNext(cls))
+                {
+                    return cls;
+                }
             }
         }
+        else
+        {
+            this.resolved_cache = this.resolveAll(this.registered_tags);
+            return this.getTagClass(content, ptr);
+        }
+
         return false;
     }
 }
